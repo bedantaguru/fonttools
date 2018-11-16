@@ -5,8 +5,8 @@ $ fonttools varLib.mutator ./NotoSansArabic-VF.ttf wght=140 wdth=85
 """
 from __future__ import print_function, division, absolute_import
 from fontTools.misc.py23 import *
+import fontTools.subset
 from fontTools.misc.fixedTools import floatToFixedToFloat, otRound
-from fontTools.misc.psCharStrings import T2FlattenSubrsDecompiler
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
 from fontTools.varLib import _GetCoordinates, _SetCoordinates
@@ -65,10 +65,6 @@ def interpolate_cff2_charstrings(topDict, interpolateFromDeltas, glyphOrder):
 		vsindex = pd.vsindex if (hasattr(pd, 'vsindex')) else 0
 		num_regions = pd.getNumRegions(vsindex)
 		numMasters = num_regions + 1
-		subrs = getattr(pd, "Subrs", [])
-		if subrs:
-			charstring.decompilerClass = T2FlattenSubrsDecompiler
-		charstring.decompile()
 		new_program = []
 		last_i = 0
 		for i, token in enumerate(charstring.program):
@@ -96,16 +92,6 @@ def interpolate_cff2_charstrings(topDict, interpolateFromDeltas, glyphOrder):
 			new_program.extend(charstring.program[last_i:])
 			charstring.program = new_program
 
-	# Since we have flattened all the charstrings, we need to delete the subrs.
-	del topDict.GlobalSubrs 
-	# An empty GlobalSubrs will always be written to the CCF2 table,
-	# even if missingfrom the decompiled CFF2 data.
-	for fontDict in topDict.FDArray:
-		pd = fontDict.Private
-		subrs = getattr(pd, "Subrs", [])
-		if subrs:
-			del pd.Subrs
-			del pd.rawDict['Subrs']
 
 
 def instantiateVariableFont(varfont, location, inplace=False):
@@ -180,11 +166,13 @@ def instantiateVariableFont(varfont, location, inplace=False):
 	if 'CFF2' in varfont:
 		log.info("Mutating CFF2 table")
 		glyphOrder = varfont.getGlyphOrder()
-		topDict = varfont['CFF2'].cff.topDictIndex[0]
+		CFF2= varfont['CFF2']
+		topDict = CFF2.cff.topDictIndex[0]
 		vsInstancer = VarStoreInstancer(topDict.VarStore.otVarStore,
 										fvar.axes, loc)
 		interpolateFromDeltas = vsInstancer.interpolateFromDeltas
 		interpolate_cff2_PrivateDict(topDict, interpolateFromDeltas)
+		CFF2.desubroutinize(varfont)
 		interpolate_cff2_charstrings(topDict, interpolateFromDeltas,
 										glyphOrder)
 
